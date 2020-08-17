@@ -463,12 +463,15 @@ void TorrentsController::trackersAction()
         int numSeeds = -1;
         int numLeeches = -1;
         int numDownloaded = -1;
+        QString message;
         for (const auto &endpoint : tracker.endpoints)
         {
             numPeers = std::max(numPeers, endpoint.numPeers);
             numSeeds = std::max(numSeeds, endpoint.numSeeds);
             numLeeches = std::max(numLeeches, endpoint.numLeeches);
             numDownloaded = std::max(numDownloaded, endpoint.numDownloaded);
+            if (message.isEmpty())
+                message = endpoint.message;
         }
 
         trackerList << QJsonObject
@@ -476,7 +479,7 @@ void TorrentsController::trackersAction()
             {KEY_TRACKER_URL, tracker.url},
             {KEY_TRACKER_TIER, tracker.tier},
             {KEY_TRACKER_STATUS, static_cast<int>(tracker.status)},
-            {KEY_TRACKER_MSG, tracker.message},
+            {KEY_TRACKER_MSG, message},
             {KEY_TRACKER_PEERS_COUNT, numPeers},
             {KEY_TRACKER_SEEDS_COUNT, numSeeds},
             {KEY_TRACKER_LEECHES_COUNT, numLeeches},

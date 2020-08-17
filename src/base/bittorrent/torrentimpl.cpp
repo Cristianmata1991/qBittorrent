@@ -94,12 +94,15 @@ namespace
         size_t numUpdating = 0;
         size_t numWorking = 0;
         size_t numNotWorking = 0;
-        QString firstTrackerMessage;
-        QString firstErrorMessage;
 
         const auto makeEndpoint = [&](const auto &endpoint, const auto &infoHash) -> TrackerEntry::EndpointStats
         {
+            std::stringstream endpointName;
+            endpointName << endpoint.local_endpoint;
+
             TrackerEntry::EndpointStats trackerEndpoint;
+            trackerEndpoint.name = QString::fromStdString(endpointName.str());
+
             trackerEndpoint.numPeers = trackerPeerCounts.value(endpoint.local_endpoint, -1);
             trackerEndpoint.numSeeds = infoHash.scrape_complete;
             trackerEndpoint.numLeeches = infoHash.scrape_incomplete;
@@ -125,16 +128,10 @@ namespace
                 trackerEndpoint.status = TrackerEntry::NotContacted;
             }
 
-            const QString trackerMessage = QString::fromStdString(infoHash.message);
-            const QString errorMessage = QString::fromLocal8Bit(infoHash.last_error.message().c_str());
-            trackerEndpoint.message = (!trackerMessage.isEmpty() ? trackerMessage : errorMessage);
-
-            trackerEntry.endpoints.append(trackerEndpoint);
-
-            if (firstTrackerMessage.isEmpty())
-                firstTrackerMessage = trackerMessage;
-            if (firstErrorMessage.isEmpty())
-                firstErrorMessage = errorMessage;
+            if (!infoHash.message.empty())
+                trackerEndpoint.message = QString::fromStdString(infoHash.message);
+            else if (infoHash.last_error)
+                trackerEndpoint.message = QString::fromStdString(infoHash.last_error.message());
 
             return trackerEndpoint;
         };
@@ -166,19 +163,11 @@ namespace
         if (numEndpoints > 0)
         {
             if (numUpdating > 0)
-            {
                 trackerEntry.status = TrackerEntry::Updating;
-            }
             else if (numWorking > 0)
-            {
                 trackerEntry.status = TrackerEntry::Working;
-                trackerEntry.message = firstTrackerMessage;
-            }
             else if (numNotWorking == numEndpoints)
-            {
                 trackerEntry.status = TrackerEntry::NotWorking;
-                trackerEntry.message = (!firstTrackerMessage.isEmpty() ? firstTrackerMessage : firstErrorMessage);
-            }
         }
 
         return trackerEntry;

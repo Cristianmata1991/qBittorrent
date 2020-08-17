@@ -66,9 +66,7 @@ TrackerListWidget::TrackerListWidget(PropertiesWidget *properties)
     // Load settings
     loadSettings();
     // Graphical settings
-    setRootIsDecorated(false);
     setAllColumnsShowFocus(true);
-    setItemsExpandable(false);
     setSelectionMode(QAbstractItemView::ExtendedSelection);
     header()->setStretchLastSection(false); // Must be set after loadSettings() in order to work
     header()->setTextElideMode(Qt::ElideRight);
@@ -92,13 +90,13 @@ TrackerListWidget::TrackerListWidget(PropertiesWidget *properties)
     connect(header(), &QHeaderView::sortIndicatorChanged, this, &TrackerListWidget::saveSettings);
 
     // Set DHT, PeX, LSD items
-    m_DHTItem = new QTreeWidgetItem({ "",  "** [DHT] **", "", "0", "", "", "0" });
+    m_DHTItem = new QTreeWidgetItem({ QStringLiteral("** [DHT] **") });
     insertTopLevelItem(0, m_DHTItem);
     setRowColor(0, QColor("grey"));
-    m_PEXItem = new QTreeWidgetItem({ "",  "** [PeX] **", "", "0", "", "", "0" });
+    m_PEXItem = new QTreeWidgetItem({ QStringLiteral("** [PeX] **") });
     insertTopLevelItem(1, m_PEXItem);
     setRowColor(1, QColor("grey"));
-    m_LSDItem = new QTreeWidgetItem({ "",  "** [LSD] **", "", "0", "", "", "0" });
+    m_LSDItem = new QTreeWidgetItem({ QStringLiteral("** [LSD] **") });
     insertTopLevelItem(2, m_LSDItem);
     setRowColor(2, QColor("grey"));
 
@@ -364,7 +362,7 @@ void TrackerListWidget::loadTrackers()
 
     const auto setAlignment = [](QTreeWidgetItem *item)
     {
-        for (TrackerListColumn col : {COL_TIER, COL_PEERS, COL_SEEDS, COL_LEECHES, COL_DOWNLOADED})
+        for (TrackerListColumn col : {COL_TIER, COL_PROTOCOL, COL_PEERS, COL_SEEDS, COL_LEECHES, COL_DOWNLOADED})
             item->setTextAlignment(col, (Qt::AlignRight | Qt::AlignVCenter));
     };
     const auto numberIf = [](const int val)
@@ -435,11 +433,25 @@ void TrackerListWidget::loadTrackers()
             updateMinMax(seedsMinMax, endpoint.numSeeds);
             updateMinMax(leechesMinMax, endpoint.numLeeches);
             updateMinMax(downloadedMinMax, endpoint.numDownloaded);
+
+            QTreeWidgetItem *child = (index < item->childCount()) ? item->child(index)
+                                                                  : new QTreeWidgetItem(item);
+            child->setText(COL_URL, endpoint.name);
+            child->setText(COL_PROTOCOL, tr("v%1").arg(endpoint.protocolVersion));
+            child->setText(COL_STATUS, toString(endpoint.status));
+            child->setText(COL_PEERS, numberIf(endpoint.numPeers));
+            child->setText(COL_SEEDS, numberIf(endpoint.numSeeds));
+            child->setText(COL_LEECHES, numberIf(endpoint.numLeeches));
+            child->setText(COL_DOWNLOADED, numberIf(endpoint.numDownloaded));
+            child->setText(COL_MSG, endpoint.message);
+            child->setToolTip(COL_MSG, endpoint.message);
+            setAlignment(child);
+            ++index;
         }
+        while (item->childCount() != index)
+            delete item->takeChild(index);
 
         item->setText(COL_TIER, QString::number(entry.tier));
-        item->setText(COL_MSG, entry.message);
-        item->setToolTip(COL_MSG, entry.message);
         item->setText(COL_STATUS, toString(entry.status));
         item->setText(COL_PEERS, printMinMax(peersMinMax));
         item->setText(COL_SEEDS, printMinMax(seedsMinMax));
@@ -652,8 +664,9 @@ QStringList TrackerListWidget::headerLabels()
 {
     return
     {
-        tr("Tier")
-        , tr("URL")
+        tr("URL/Announce endpoint")
+        , tr("Tier")
+        , tr("Protocol")
         , tr("Status")
         , tr("Peers")
         , tr("Seeds")

@@ -54,6 +54,7 @@ namespace BitTorrent
             int numLeeches = -1;
             int numDownloaded = -1;
             QString message {};
+            QString name {};
         };
 
         QString url {};
@@ -61,9 +62,6 @@ namespace BitTorrent
         Status status = NotContacted;
 
         QVector<EndpointStats> endpoints {};
-
-        // Deprecated fields
-        QString message {};
     };
 
     bool operator==(const TrackerEntry &left, const TrackerEntry &right);
