@@ -91,83 +91,26 @@ namespace
     {
         TrackerEntry trackerEntry {QString::fromStdString(nativeEntry.url), nativeEntry.tier};
 
-        int numUpdating = 0;
-        int numWorking = 0;
-        int numNotWorking = 0;
+        size_t numUpdating = 0;
+        size_t numWorking = 0;
+        size_t numNotWorking = 0;
         QString firstTrackerMessage;
         QString firstErrorMessage;
-#ifdef QBT_USES_LIBTORRENT2
-        const auto numEndpoints = static_cast<qsizetype>(nativeEntry.endpoints.size() * ((hashes.has_v1() && hashes.has_v2()) ? 2 : 1));
-        trackerEntry.endpoints.reserve(static_cast<decltype(trackerEntry.endpoints)::size_type>(numEndpoints));
-        for (const lt::announce_endpoint &endpoint : nativeEntry.endpoints)
-        {
-            for (const auto protocolVersion : {lt::protocol_version::V1, lt::protocol_version::V2})
-            {
-                if (hashes.has(protocolVersion))
-                {
-                    const lt::announce_infohash &infoHash = endpoint.info_hashes[protocolVersion];
 
-                    TrackerEntry::EndpointStats trackerEndpoint;
-                    trackerEndpoint.protocolVersion = (protocolVersion == lt::protocol_version::V1) ? 1 : 2;
-                    trackerEndpoint.numPeers = trackerPeerCounts.value(endpoint.local_endpoint, -1);
-                    trackerEndpoint.numSeeds = infoHash.scrape_complete;
-                    trackerEndpoint.numLeeches = infoHash.scrape_incomplete;
-                    trackerEndpoint.numDownloaded = infoHash.scrape_downloaded;
-
-                    if (infoHash.updating)
-                    {
-                        trackerEndpoint.status = TrackerEntry::Updating;
-                        ++numUpdating;
-                    }
-                    else if (infoHash.fails > 0)
-                    {
-                        trackerEndpoint.status = TrackerEntry::NotWorking;
-                        ++numNotWorking;
-                    }
-                    else if (nativeEntry.verified)
-                    {
-                        trackerEndpoint.status = TrackerEntry::Working;
-                        ++numWorking;
-                    }
-                    else
-                    {
-                        trackerEndpoint.status = TrackerEntry::NotContacted;
-                    }
-
-                    const QString trackerMessage = QString::fromStdString(infoHash.message);
-                    const QString errorMessage = QString::fromLocal8Bit(infoHash.last_error.message().c_str());
-                    trackerEndpoint.message = (!trackerMessage.isEmpty() ? trackerMessage : errorMessage);
-
-                    trackerEntry.endpoints.append(trackerEndpoint);
-                    trackerEntry.numPeers = std::max(trackerEntry.numPeers, trackerEndpoint.numPeers);
-                    trackerEntry.numSeeds = std::max(trackerEntry.numSeeds, trackerEndpoint.numSeeds);
-                    trackerEntry.numLeeches = std::max(trackerEntry.numLeeches, trackerEndpoint.numLeeches);
-                    trackerEntry.numDownloaded = std::max(trackerEntry.numDownloaded, trackerEndpoint.numDownloaded);
-
-                    if (firstTrackerMessage.isEmpty())
-                        firstTrackerMessage = trackerMessage;
-                    if (firstErrorMessage.isEmpty())
-                        firstErrorMessage = errorMessage;
-                }
-            }
-        }
-#else
-        const auto numEndpoints = static_cast<qsizetype>(nativeEntry.endpoints.size());
-        trackerEntry.endpoints.reserve(static_cast<decltype(trackerEntry.endpoints)::size_type>(numEndpoints));
-        for (const lt::announce_endpoint &endpoint : nativeEntry.endpoints)
+        const auto makeEndpoint = [&](const auto &endpoint, const auto &infoHash) -> TrackerEntry::EndpointStats
         {
             TrackerEntry::EndpointStats trackerEndpoint;
             trackerEndpoint.numPeers = trackerPeerCounts.value(endpoint.local_endpoint, -1);
-            trackerEndpoint.numSeeds = endpoint.scrape_complete;
-            trackerEndpoint.numLeeches = endpoint.scrape_incomplete;
-            trackerEndpoint.numDownloaded = endpoint.scrape_downloaded;
+            trackerEndpoint.numSeeds = infoHash.scrape_complete;
+            trackerEndpoint.numLeeches = infoHash.scrape_incomplete;
+            trackerEndpoint.numDownloaded = infoHash.scrape_downloaded;
 
-            if (endpoint.updating)
+            if (infoHash.updating)
             {
                 trackerEndpoint.status = TrackerEntry::Updating;
                 ++numUpdating;
             }
-            else if (endpoint.fails > 0)
+            else if (infoHash.fails > 0)
             {
                 trackerEndpoint.status = TrackerEntry::NotWorking;
                 ++numNotWorking;
@@ -182,8 +125,8 @@ namespace
                 trackerEndpoint.status = TrackerEntry::NotContacted;
             }
 
-            const QString trackerMessage = QString::fromStdString(endpoint.message);
-            const QString errorMessage = QString::fromLocal8Bit(endpoint.last_error.message().c_str());
+            const QString trackerMessage = QString::fromStdString(infoHash.message);
+            const QString errorMessage = QString::fromLocal8Bit(infoHash.last_error.message().c_str());
             trackerEndpoint.message = (!trackerMessage.isEmpty() ? trackerMessage : errorMessage);
 
             trackerEntry.endpoints.append(trackerEndpoint);
@@ -196,8 +139,33 @@ namespace
                 firstTrackerMessage = trackerMessage;
             if (firstErrorMessage.isEmpty())
                 firstErrorMessage = errorMessage;
-        }
+
+            return trackerEndpoint;
+        };
+
+        size_t numEndpoints = nativeEntry.endpoints.size();
+#ifdef QBT_USES_LIBTORRENT2
+        if (hashes.has_v1() && hashes.has_v2())
+            numEndpoints *= 2;
 #endif
+        trackerEntry.endpoints.reserve(static_cast<decltype(trackerEntry.endpoints)::size_type>(numEndpoints));
+        for (const lt::announce_endpoint &endpoint : nativeEntry.endpoints)
+        {
+#ifdef QBT_USES_LIBTORRENT2
+            for (const auto protocolVersion : {lt::protocol_version::V1, lt::protocol_version::V2})
+            {
+                if (!hashes.has(protocolVersion))
+                    continue;
+
+                auto trackerEndpoint = makeEndpoint(endpoint, endpoint.info_hashes[protocolVersion]);
+                trackerEndpoint.protocolVersion = (protocolVersion == lt::protocol_version::V1) ? 1 : 2;
+
+                trackerEntry.endpoints.append(std::move(trackerEndpoint));
+            }
+#else
+            trackerEntry.endpoints.append(makeEndpoint(endpoint, endpoint));
+#endif
+        }
 
         if (numEndpoints > 0)
         {
