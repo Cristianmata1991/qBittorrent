@@ -130,10 +130,6 @@ namespace
             trackerEndpoint.message = (!trackerMessage.isEmpty() ? trackerMessage : errorMessage);
 
             trackerEntry.endpoints.append(trackerEndpoint);
-            trackerEntry.numPeers = std::max(trackerEntry.numPeers, trackerEndpoint.numPeers);
-            trackerEntry.numSeeds = std::max(trackerEntry.numSeeds, trackerEndpoint.numSeeds);
-            trackerEntry.numLeeches = std::max(trackerEntry.numLeeches, trackerEndpoint.numLeeches);
-            trackerEntry.numDownloaded = std::max(trackerEntry.numDownloaded, trackerEndpoint.numDownloaded);
 
             if (firstTrackerMessage.isEmpty())
                 firstTrackerMessage = trackerMessage;
